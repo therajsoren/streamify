@@ -110,11 +110,13 @@ export const login = async (req,res)=> {
     }, process.env.JWT_SECRET_KEY,{
       expiresIn:"7d"
     })
+
+    // setting cookie securely
     res.cookie("jwt", token, {
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      httpOnly: true, // prevent XSS attacks,
-      sameSite: "strict", // prevent CSRF attacks
-      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days in milliseconds
+      httpOnly: true, // prevent XSS attacks,  ---> prevents JavaScript from accessing the cookie
+      sameSite: "strict", // prevent CSRF attacks  ---> prevents cross-site requests from sending the cookie
+      secure: process.env.NODE_ENV === "production", // ensures that the cookie is only sent over HTTPS
     })
 
     res.status(200).json({
@@ -136,4 +138,63 @@ export const logout = async (req,res)=> {
       success:true,
       message: "Logout successful"
     })
+}
+
+export const onboard = async (req, res)=> {
+  try {
+    const userId = req.user._id; // get the user id from the request object
+    const {fullName, bio, nativeLanguage, learningLanguage, location} = req.body;
+
+    if(!fullName || !bio || !nativeLanguage || !learningLanguage || !location){
+      return res.status(400).json({
+        message: "All fields are required",
+        missingFields: [
+          !fullName && "fullName",
+          !bio && "bio",
+          !nativeLanguage && "nativeLanguage",
+          !learningLanguage && "learningLanguage",
+          !location && "location",
+        ],
+      })
+    }
+
+    const allowUpdateFields = {fullName, bio, nativeLanguage, learningLanguage, location};
+
+    const updateUser = await User.findByIdAndUpdate(userId, {
+      ...allowUpdateFields, // update the user with the provided fields
+      isOnboarded: true, // set isOnboarded to true
+    }, {
+      new: true,
+      runValidators: true, // run validators on the updated fields
+    }); // return the updated user
+
+    if(!updateUser){
+      return res.status(404).json({
+        message: "User not found",
+      })
+    }
+
+    // update the user in the stream database
+    try{
+      await upsertStreamUser({
+        id: updateUser._id.toString(),
+        name: updateUser.fullName,
+        image:updateUser.profilePic || "",   
+      })
+      console.log( `Stream user updated for ${updateUser.fullName}`)
+    } catch(error){
+      console.log("Error updating stream user: ", error.message)
+    }
+
+    res.status(200).json({
+      success:true,
+      user: updateUser,
+    })
+
+  } catch (error) {
+      console.log("Error in onboarding controller", error);
+      res.status(500).json({
+        message: "Internal Server Error"
+      })
+  }
 }
