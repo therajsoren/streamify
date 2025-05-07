@@ -10,5 +10,6 @@ userRoutes.get("/", getRecommendedUsers);
 userRoutes.get("/friends", getMyFriends);
 
 userRoutes.post("/friend-request/:id", sendFriendRequest);
+userRoutes.post("/friend-request/:id/accept", acceptFriendRequest);
 
 export {userRoutes};
